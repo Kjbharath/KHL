@@ -103,7 +103,7 @@ services:
       - OLLAMA_BASE_URL=http://ollama-engine:11434
       - OPENAI_API_BASE_URL=http://vllm-engine:8000/v1
       - OPENAI_API_KEY=dummy
-      - DEFAULT_SYSTEM_PROMPT="You are a helpful AI. You must write all of your internal reasoning and thoughts inside <think> and </think> tags before you provide your final answer."
+      - DEFAULT_SYSTEM_PROMPT="You are a helpful AI assistant."
     volumes:
       - open-webui_data:/app/backend/data
       - /var/run/docker.sock:/var/run/docker.sock
