@@ -44,6 +44,21 @@ KHL uses Docker Compose to manage its services efficiently.
 
 Use the **KHL Dashboard** to manage VRAM allocation automatically between Ollama and vLLM.
 
+## Model Managers & Hugging Face Integration
+
+The dashboard features built-in Model Managers for both engines:
+1. **Ollama**: Download models natively from the Ollama library.
+2. **vLLM**: Pull models directly from **Hugging Face** repositories using the dashboard UI. You can also specify the desired **Context Length** window (e.g. 32k, 64k) before loading.
+
+### Hugging Face Access Token Setup (Optional)
+To pull gated models (like Llama 3) and unlock faster download rates, configure your Hugging Face Access Token:
+1. Generate a **Read** token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
+2. Open your local `.env` file and append:
+   ```env
+   HF_TOKEN=hf_your_actual_token_here
+   ```
+*(Note: `.env` is already configured in `.gitignore`, so your token will remain local and private, and will never be pushed to Git.)*
+
 ## Ponytail Philosophy
 
 This platform embraces the "Ponytail" engineering philosophy: keeping things sleek, deleting over-engineered cruft, and focusing on pure speed and utility. The dashboard polling has been optimized for low latency and zero UI blocking.
