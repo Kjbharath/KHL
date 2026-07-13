@@ -14,6 +14,21 @@ function EndpointsProvider({ children }) {
     hermesDashboard: 'http://localhost:9119',
     comfyui: 'http://localhost:8188'
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      setEndpoints({
+        ollama: `http://${hostname}:11434`,
+        vllm: `http://${hostname}:8000`,
+        webui: `http://${hostname}:8080`,
+        hermes: `http://${hostname}:8000`,
+        hermesDashboard: `http://${hostname}:9119`,
+        comfyui: `http://${hostname}:8188`
+      });
+    }
+  }, []);
+
   return (
     <EndpointsContext.Provider value={{ endpoints, setEndpoints }}>
       {children}
@@ -81,6 +96,21 @@ function CopyButton({ text }) {
     <button className="btn btn-secondary btn-icon" onClick={handleCopy} title="Copy to clipboard" style={{ width: 'auto', padding: '4px 8px', fontSize: '0.7rem' }}>
       {copied ? '✓ Copied' : '📋 Copy'}
     </button>
+  );
+}
+
+function OpenButton({ url }) {
+  return (
+    <a 
+      href={url} 
+      target="_blank" 
+      rel="noopener noreferrer" 
+      className="btn btn-secondary btn-icon" 
+      style={{ width: 'auto', padding: '4px 8px', fontSize: '0.7rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+      title="Open in new tab"
+    >
+      🌐 Open
+    </a>
   );
 }
 
@@ -162,6 +192,7 @@ function OllamaPanel({ addToast }) {
               onChange={(e) => setEndpoints({...endpoints, ollama: e.target.value})}
             />
             <CopyButton text={endpoints.ollama} />
+            <OpenButton url={endpoints.ollama} />
           </div>
         </div>
         
@@ -229,6 +260,7 @@ function VLLMPanel() {
               onChange={(e) => setEndpoints({...endpoints, vllm: e.target.value})}
             />
             <CopyButton text={`${endpoints.vllm}/v1`} />
+            <OpenButton url={`${endpoints.vllm}/v1`} />
           </div>
         </div>
         
@@ -261,12 +293,16 @@ function HermesPanel() {
       <div className="panel-body">
         <div className="detail-row" style={{ marginBottom: '16px' }}>
           <span className="detail-label">Hermes Endpoint</span>
-          <input 
-            className="pull-input" 
-            style={{ padding: '4px 8px', margin: 0, width: '200px' }}
-            value={endpoints.hermes} 
-            onChange={(e) => setEndpoints({...endpoints, hermes: e.target.value})}
-          />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input 
+              className="pull-input" 
+              style={{ padding: '4px 8px', margin: 0, width: '200px' }}
+              value={endpoints.hermes} 
+              onChange={(e) => setEndpoints({...endpoints, hermes: e.target.value})}
+            />
+            <CopyButton text={endpoints.hermes} />
+            <OpenButton url={endpoints.hermes} />
+          </div>
         </div>
 
         <div className="detail-row" style={{ marginBottom: '16px', flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
