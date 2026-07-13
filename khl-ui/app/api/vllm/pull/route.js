@@ -50,6 +50,7 @@ export async function POST(request) {
         
         const recreate = spawn('docker', [
           'compose', 
+          '-p', 'khl-main',
           '-f', '/project/docker-compose.yml', 
           '--env-file', '/project/.env',
           'up', '-d', 'vllm-engine', '--force-recreate'
