@@ -78,6 +78,13 @@ export async function POST(request) {
           logs.stdout.on('data', (data) => {
             const text = data.toString();
             controller.enqueue(encoder.encode(JSON.stringify({ log: text }) + '\n'));
+            
+            const progressMatch = /(\d+)%/.exec(text);
+            if (progressMatch) {
+              const percent = parseInt(progressMatch[1], 10);
+              controller.enqueue(encoder.encode(JSON.stringify({ percent }) + '\n'));
+            }
+
             if (text.includes('Uvicorn running on') || text.includes('Application startup complete.')) {
               controller.enqueue(encoder.encode(JSON.stringify({ status: 'Ready' }) + '\n'));
               logs.kill();
@@ -88,6 +95,13 @@ export async function POST(request) {
           logs.stderr.on('data', (data) => {
             const text = data.toString();
             controller.enqueue(encoder.encode(JSON.stringify({ log: text }) + '\n'));
+
+            const progressMatch = /(\d+)%/.exec(text);
+            if (progressMatch) {
+              const percent = parseInt(progressMatch[1], 10);
+              controller.enqueue(encoder.encode(JSON.stringify({ percent }) + '\n'));
+            }
+
             if (text.includes('Uvicorn running on') || text.includes('Application startup complete.')) {
               controller.enqueue(encoder.encode(JSON.stringify({ status: 'Ready' }) + '\n'));
               logs.kill();
@@ -95,7 +109,19 @@ export async function POST(request) {
             }
           });
 
-          logs.on('close', () => {
+          logs.on('close', async () => {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            try {
+              const inspectRes = await fetch('http://localhost:3000/api/engine/toggle');
+              if (inspectRes.ok) {
+                const statusData = await inspectRes.json();
+                if (statusData.vllm !== 'running') {
+                  controller.enqueue(encoder.encode(JSON.stringify({ error: 'vLLM container exited or crashed. Check logs below for the exact error.' }) + '\n'));
+                }
+              }
+            } catch (err) {
+              console.error('Failed to verify container status on close:', err.message);
+            }
             try {
               controller.close();
             } catch {}

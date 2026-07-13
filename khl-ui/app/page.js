@@ -242,12 +242,16 @@ function VLLMPanel({ addToast }) {
   const [pullName, setPullName] = useState('');
   const [pulling, setPulling] = useState(false);
   const [pullProgress, setPullProgress] = useState('');
+  const [percent, setPercent] = useState(null);
+  const [error, setError] = useState(null);
 
   const activeModel = meta?.data?.[0]?.id || 'No model loaded';
 
   const handlePull = async () => {
     if (!pullName.trim() || pulling) return;
     setPulling(true);
+    setPercent(null);
+    setError(null);
     setPullProgress('Initiating vLLM model download/load…\n');
     addToast('info', `Configuring vLLM to load ${pullName}…`);
 
@@ -271,8 +275,12 @@ function VLLMPanel({ addToast }) {
             try {
               const json = JSON.parse(line);
               if (json.error) {
+                setError(json.error);
+                setPercent(null);
                 setPullProgress((prev) => prev + `❌ Error: ${json.error}\n`);
                 addToast('error', `vLLM load failed: ${json.error}`);
+              } else if (json.percent !== undefined) {
+                setPercent(json.percent);
               } else if (json.status) {
                 setPullProgress((prev) => prev + `ℹ ${json.status}\n`);
               } else if (json.log) {
@@ -284,9 +292,15 @@ function VLLMPanel({ addToast }) {
           }
         }
       }
-      addToast('success', `Successfully configured vLLM with ${pullName}`);
-      setPullName('');
+      // Only show success if no error was set during the stream
+      if (!error) {
+        addToast('success', `Successfully configured vLLM with ${pullName}`);
+        setPullName('');
+        setPercent(null);
+      }
     } catch (err) {
+      setError(err.message);
+      setPercent(null);
       addToast('error', `Failed to load model: ${err.message}`);
     } finally {
       setPulling(false);
@@ -349,8 +363,35 @@ function VLLMPanel({ addToast }) {
             {pulling ? '⏳ Loading…' : '⬇ Load Model'}
           </button>
         </div>
+
+        {percent !== null && (
+          <div style={{ marginTop: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '4px' }}>
+              <span>Downloading Model...</span>
+              <strong>{percent}%</strong>
+            </div>
+            <div className="progress-bar-container" style={{ height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
+              <div 
+                className="progress-bar" 
+                style={{ 
+                  width: `${percent}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, var(--khl-accent-cyan), #78ffd6)',
+                  transition: 'width 0.3s ease'
+                }} 
+              />
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(255, 76, 76, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 76, 76, 0.2)', fontSize: '0.8rem', color: '#ff4c4c' }}>
+            <strong>Error Loading Model:</strong> {error}
+          </div>
+        )}
+
         {pullProgress && (
-          <div style={{ marginTop: '8px' }}>
+          <div style={{ marginTop: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--khl-text-secondary)' }}>Download / Startup Logs:</span>
               <button className="btn btn-secondary btn-icon" style={{ fontSize: '0.65rem', padding: '2px 6px', width: 'auto' }} onClick={() => setPullProgress('')}>Clear Logs</button>
