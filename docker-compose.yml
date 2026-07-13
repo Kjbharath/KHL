@@ -43,6 +43,7 @@ services:
   vllm-engine:
     image: vllm/vllm-openai:latest
     container_name: vllm-engine
+    tty: true
     ports:
       - "${BIND_IP:-0.0.0.0}:8000:8000"
     volumes:
