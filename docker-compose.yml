@@ -48,7 +48,7 @@ services:
     environment:
       - NCCL_IGNORE_DISABLED_P2P=1
     command: >
-      --model protoLabsAI/Qwythos-9B-v2-NVFP4
+      --model ${VLLM_MODEL:-protoLabsAI/Qwythos-9B-v2-NVFP4}
       --max-model-len 65536
       --gpu-memory-utilization 0.95
       --kv-cache-dtype fp8
