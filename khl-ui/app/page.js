@@ -235,11 +235,63 @@ function OllamaPanel({ addToast }) {
   );
 }
 
-function VLLMPanel() {
+function VLLMPanel({ addToast }) {
   const { endpoints, setEndpoints } = useContext(EndpointsContext);
   const { status, meta } = useIsolatedServiceStatus('/api/vllm/models');
   
+  const [pullName, setPullName] = useState('');
+  const [pulling, setPulling] = useState(false);
+  const [pullProgress, setPullProgress] = useState('');
+
   const activeModel = meta?.data?.[0]?.id || 'No model loaded';
+
+  const handlePull = async () => {
+    if (!pullName.trim() || pulling) return;
+    setPulling(true);
+    setPullProgress('Initiating vLLM model download/load…\n');
+    addToast('info', `Configuring vLLM to load ${pullName}…`);
+
+    try {
+      const res = await fetch('/api/vllm/pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: pullName.trim() }),
+      });
+
+      if (!res.ok) throw new Error('Load request failed');
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const text = decoder.decode(value);
+          const lines = text.split('\n').filter(Boolean);
+          for (const line of lines) {
+            try {
+              const json = JSON.parse(line);
+              if (json.error) {
+                setPullProgress((prev) => prev + `❌ Error: ${json.error}\n`);
+                addToast('error', `vLLM load failed: ${json.error}`);
+              } else if (json.status) {
+                setPullProgress((prev) => prev + `ℹ ${json.status}\n`);
+              } else if (json.log) {
+                setPullProgress((prev) => prev + json.log);
+              }
+            } catch {
+              setPullProgress((prev) => prev + line + '\n');
+            }
+          }
+        }
+      }
+      addToast('success', `Successfully configured vLLM with ${pullName}`);
+      setPullName('');
+    } catch (err) {
+      addToast('error', `Failed to load model: ${err.message}`);
+    } finally {
+      setPulling(false);
+    }
+  };
 
   return (
     <div className="panel" style={{ borderColor: 'var(--khl-accent-cyan)' }}>
@@ -269,12 +321,58 @@ function VLLMPanel() {
           <span className="detail-value" style={{ color: 'var(--khl-accent-cyan)' }}>{activeModel}</span>
         </div>
 
-        <div className="detail-row">
+        <div className="detail-row" style={{ marginBottom: '16px' }}>
           <span className="detail-label">Documentation</span>
           <a href="https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html" target="_blank" rel="noopener noreferrer" className="comfyui-link" style={{ padding: '6px 12px', fontSize: '0.75rem', borderColor: 'rgba(0, 206, 201, 0.3)', color: 'var(--khl-accent-cyan)' }}>
             vLLM API Docs ↗
           </a>
         </div>
+
+        <div className="section-title" style={{ marginTop: '24px' }}>Model Manager</div>
+        <div className="pull-bar">
+          <input
+            className="pull-input"
+            type="text"
+            placeholder="HuggingFace repository ID (e.g. Qwen/Qwen2.5-Coder-7B-Instruct)"
+            value={pullName}
+            onChange={(e) => setPullName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handlePull()}
+            disabled={pulling}
+            style={{ borderColor: 'rgba(0, 206, 201, 0.3)' }}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={handlePull}
+            disabled={pulling || !pullName.trim()}
+            style={{ background: 'var(--khl-accent-cyan)', borderColor: 'var(--khl-accent-cyan)', color: '#000', boxShadow: 'var(--khl-glow-cyan)' }}
+          >
+            {pulling ? '⏳ Loading…' : '⬇ Load Model'}
+          </button>
+        </div>
+        {pullProgress && (
+          <div style={{ marginTop: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--khl-text-secondary)' }}>Download / Startup Logs:</span>
+              <button className="btn btn-secondary btn-icon" style={{ fontSize: '0.65rem', padding: '2px 6px', width: 'auto' }} onClick={() => setPullProgress('')}>Clear Logs</button>
+            </div>
+            <pre style={{ 
+              maxHeight: '180px', 
+              overflowY: 'auto', 
+              background: 'rgba(0,0,0,0.5)', 
+              color: '#00cecb', 
+              fontSize: '0.7rem', 
+              fontFamily: 'var(--font-mono)', 
+              padding: '8px', 
+              borderRadius: '4px',
+              border: '1px solid rgba(0, 206, 201, 0.1)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+              margin: 0
+            }}>
+              {pullProgress}
+            </pre>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -616,7 +714,7 @@ export default function Dashboard() {
           <div className="section-title">AI Engines</div>
           <div className="status-grid">
             <OllamaPanel addToast={addToast} />
-            <VLLMPanel />
+            <VLLMPanel addToast={addToast} />
             <HermesPanel addToast={addToast} />
           </div>
 

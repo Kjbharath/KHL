@@ -1,0 +1,123 @@
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+
+const envPath = '/project/.env';
+
+function updateEnv(modelName) {
+  let content = '';
+  if (fs.existsSync(envPath)) {
+    content = fs.readFileSync(envPath, 'utf8');
+  }
+  
+  const regex = /^VLLM_MODEL=.*$/m;
+  if (regex.test(content)) {
+    content = content.replace(regex, `VLLM_MODEL=${modelName}`);
+  } else {
+    if (content && !content.endsWith('\n')) {
+      content += '\n';
+    }
+    content += `VLLM_MODEL=${modelName}\n`;
+  }
+  fs.writeFileSync(envPath, content, 'utf8');
+}
+
+export async function POST(request) {
+  try {
+    const { name } = await request.json();
+    if (!name || !name.trim()) {
+      return Response.json({ error: 'Model name is required' }, { status: 400 });
+    }
+
+    const modelName = name.trim();
+
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+
+        // 1. Update the env file
+        try {
+          updateEnv(modelName);
+          controller.enqueue(encoder.encode(JSON.stringify({ status: `Configured VLLM_MODEL=${modelName} in .env` }) + '\n'));
+        } catch (err) {
+          controller.enqueue(encoder.encode(JSON.stringify({ error: `Failed to update .env: ${err.message}` }) + '\n'));
+          controller.close();
+          return;
+        }
+
+        // 2. Recreate container
+        controller.enqueue(encoder.encode(JSON.stringify({ status: 'Recreating vllm-engine container (starting model download)...' }) + '\n'));
+        
+        const recreate = spawn('docker', [
+          'compose', 
+          '-f', '/project/docker-compose.yml', 
+          '--env-file', '/project/.env',
+          'up', '-d', 'vllm-engine', '--force-recreate'
+        ]);
+
+        recreate.stdout.on('data', (data) => {
+          controller.enqueue(encoder.encode(JSON.stringify({ status: data.toString().trim() }) + '\n'));
+        });
+        recreate.stderr.on('data', (data) => {
+          controller.enqueue(encoder.encode(JSON.stringify({ status: data.toString().trim() }) + '\n'));
+        });
+
+        recreate.on('close', (code) => {
+          if (code !== 0) {
+            controller.enqueue(encoder.encode(JSON.stringify({ error: `Container recreation failed (exit code ${code})` }) + '\n'));
+            controller.close();
+            return;
+          }
+
+          controller.enqueue(encoder.encode(JSON.stringify({ status: 'Container started. Streaming download/initialization logs...' }) + '\n'));
+
+          // 3. Stream container logs
+          const logs = spawn('docker', ['logs', '-f', '--tail', '30', 'vllm-engine']);
+
+          logs.stdout.on('data', (data) => {
+            const text = data.toString();
+            controller.enqueue(encoder.encode(JSON.stringify({ log: text }) + '\n'));
+            if (text.includes('Uvicorn running on') || text.includes('Application startup complete.')) {
+              controller.enqueue(encoder.encode(JSON.stringify({ status: 'Ready' }) + '\n'));
+              logs.kill();
+              controller.close();
+            }
+          });
+
+          logs.stderr.on('data', (data) => {
+            const text = data.toString();
+            controller.enqueue(encoder.encode(JSON.stringify({ log: text }) + '\n'));
+            if (text.includes('Uvicorn running on') || text.includes('Application startup complete.')) {
+              controller.enqueue(encoder.encode(JSON.stringify({ status: 'Ready' }) + '\n'));
+              logs.kill();
+              controller.close();
+            }
+          });
+
+          logs.on('close', () => {
+            try {
+              controller.close();
+            } catch {}
+          });
+
+          request.signal.addEventListener('abort', () => {
+            logs.kill();
+          });
+        });
+
+        request.signal.addEventListener('abort', () => {
+          recreate.kill();
+        });
+      }
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+        'Transfer-Encoding': 'chunked',
+      },
+    });
+  } catch (err) {
+    return Response.json({ error: 'Failed to initiate load', detail: err.message }, { status: 500 });
+  }
+}
