@@ -280,15 +280,68 @@ function VLLMPanel() {
   );
 }
 
-function HermesPanel() {
+function useDockerContainerStatus(interval = 10000) {
+  const [status, setStatus] = useState('loading');
+
+  useEffect(() => {
+    let mounted = true;
+    const check = async () => {
+      try {
+        const res = await fetch('/api/engine/toggle');
+        if (!mounted) return;
+        if (res.ok) {
+          const data = await res.json();
+          setStatus(data.hermes === 'running' ? 'online' : 'offline');
+        } else {
+          setStatus('offline');
+        }
+      } catch {
+        if (mounted) setStatus('offline');
+      }
+    };
+    check();
+    const id = setInterval(check, interval);
+    return () => { mounted = false; clearInterval(id); };
+  }, [interval]);
+
+  return status;
+}
+
+function HermesPanel({ addToast }) {
   const { endpoints, setEndpoints } = useContext(EndpointsContext);
-  
+  const status = useDockerContainerStatus();
+  const [toggling, setToggling] = useState(false);
+
+  const handleToggle = async () => {
+    if (toggling) return;
+    setToggling(true);
+    const action = status === 'online' ? 'hermes_stop' : 'hermes_start';
+    addToast('info', status === 'online' ? 'Stopping Hermes Agent...' : 'Starting Hermes Agent...');
+    try {
+      const res = await fetch('/api/engine/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: action }),
+      });
+      if (res.ok) {
+        addToast('success', status === 'online' ? 'Hermes Agent stopped.' : 'Hermes Agent started.');
+      } else {
+        addToast('error', 'Action failed.');
+      }
+    } catch {
+      addToast('error', 'Connection error.');
+    } finally {
+      setToggling(false);
+    }
+  };
+
   return (
     <div className="panel" style={{ borderColor: 'var(--khl-accent-amber)' }}>
       <div className="panel-header">
         <div className="panel-title">
           <span>🦅</span> Hermes Agent
         </div>
+        <StatusBadge status={status} />
       </div>
       <div className="panel-body">
         <div className="detail-row" style={{ marginBottom: '16px' }}>
@@ -319,16 +372,37 @@ function HermesPanel() {
           <strong style={{ color: 'var(--khl-accent-amber)' }}>Notes:</strong> Ensure Hermes models support tool-calling via function definitions in the prompt. Use <code style={{color:'var(--khl-text-primary)'}}>&lt;think&gt;...&lt;/think&gt;</code> tags to encapsulate chain-of-thought reasoning before outputting the final JSON tool call.
         </div>
         
-        <div style={{ textAlign: 'center' }}>
-          <a 
-            href={endpoints.hermesDashboard} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="btn btn-primary"
-            style={{ padding: '12px 24px', fontSize: '1rem', textDecoration: 'none', borderRadius: '30px', boxShadow: 'var(--khl-glow-amber)', background: 'var(--khl-accent-amber)', color: '#000' }}
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px', flexWrap: 'wrap' }}>
+          {status === 'online' && (
+            <a 
+              href={endpoints.hermesDashboard} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="btn btn-primary"
+              style={{ padding: '12px 24px', fontSize: '1rem', textDecoration: 'none', borderRadius: '30px', boxShadow: 'var(--khl-glow-amber)', background: 'var(--khl-accent-amber)', color: '#000' }}
+            >
+              🦅 Launch Hermes Dashboard
+            </a>
+          )}
+          <button 
+            className={status === 'online' ? 'btn btn-danger' : 'btn btn-primary'}
+            onClick={handleToggle} 
+            disabled={toggling}
+            style={{ 
+              padding: '12px 24px', 
+              fontSize: '1rem', 
+              borderRadius: '30px', 
+              cursor: 'pointer',
+              ...(status !== 'online' ? {
+                background: 'var(--khl-accent-amber)',
+                color: '#000',
+                border: 'none',
+                boxShadow: 'var(--khl-glow-amber)'
+              } : {})
+            }}
           >
-            🦅 Launch Hermes Dashboard
-          </a>
+            {toggling ? '⏳ Please wait...' : status === 'online' ? '🔴 Turn Off Hermes' : '🟢 Turn On Hermes'}
+          </button>
         </div>
       </div>
     </div>
@@ -501,7 +575,7 @@ export default function Dashboard() {
           <div className="status-grid">
             <OllamaPanel addToast={addToast} />
             <VLLMPanel />
-            <HermesPanel />
+            <HermesPanel addToast={addToast} />
           </div>
 
           <div className="section-title">Interfaces</div>

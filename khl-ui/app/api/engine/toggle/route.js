@@ -37,10 +37,11 @@ function dockerApi(path, method = 'POST') {
 
 export async function GET() {
   try {
-    const [ollamaInfo, vllmInfo, comfyInfo] = await Promise.all([
+    const [ollamaInfo, vllmInfo, comfyInfo, hermesInfo] = await Promise.all([
       dockerApi('/containers/ollama-engine/json', 'GET').catch(() => null),
       dockerApi('/containers/vllm-engine/json', 'GET').catch(() => null),
       dockerApi('/containers/bharath-comfyui/json', 'GET').catch(() => null),
+      dockerApi('/containers/hermes-dashboard/json', 'GET').catch(() => null),
     ]);
 
     let logs = 'No logs available';
@@ -53,8 +54,9 @@ export async function GET() {
 
     return Response.json({
       ollama: ollamaInfo?.State?.Status || 'unknown',
-      vllm: vllmInfo || 'unknown',
+      vllm: vllmInfo?.State?.Status || 'unknown',
       comfyui: comfyInfo?.State?.Status || 'unknown',
+      hermes: hermesInfo?.State?.Status || 'unknown',
       logs: logs
     });
   } catch (err) {
@@ -147,6 +149,20 @@ export async function POST(request) {
       await Promise.all([
         dockerApi('/containers/ollama-engine/stop').catch(() => null),
         dockerApi('/containers/vllm-engine/stop').catch(() => null),
+      ]);
+      return Response.json({ success: true, active: 'none' });
+    } else if (target === 'hermes_start') {
+      console.log('Starting Hermes Agent and Dashboard...');
+      await Promise.all([
+        dockerApi('/containers/hermes/start').catch(() => null),
+        dockerApi('/containers/hermes-dashboard/start').catch(() => null),
+      ]);
+      return Response.json({ success: true, active: 'hermes' });
+    } else if (target === 'hermes_stop') {
+      console.log('Stopping Hermes Agent and Dashboard...');
+      await Promise.all([
+        dockerApi('/containers/hermes-dashboard/stop').catch(() => null),
+        dockerApi('/containers/hermes/stop').catch(() => null),
       ]);
       return Response.json({ success: true, active: 'none' });
     }
