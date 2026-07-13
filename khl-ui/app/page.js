@@ -240,6 +240,7 @@ function VLLMPanel({ addToast }) {
   const { status, meta } = useIsolatedServiceStatus('/api/vllm/models');
   
   const [pullName, setPullName] = useState('');
+  const [contextLen, setContextLen] = useState('32768');
   const [pulling, setPulling] = useState(false);
   const [pullProgress, setPullProgress] = useState('');
   const [percent, setPercent] = useState(null);
@@ -259,7 +260,7 @@ function VLLMPanel({ addToast }) {
       const res = await fetch('/api/vllm/pull', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: pullName.trim() }),
+        body: JSON.stringify({ name: pullName.trim(), max_model_len: parseInt(contextLen, 10) }),
       });
 
       if (!res.ok) throw new Error('Load request failed');
@@ -343,26 +344,45 @@ function VLLMPanel({ addToast }) {
         </div>
 
         <div className="section-title" style={{ marginTop: '24px' }}>Model Manager</div>
-        <div className="pull-bar">
-          <input
-            className="pull-input"
-            type="text"
-            placeholder="HuggingFace repository ID (e.g. Qwen/Qwen2.5-Coder-7B-Instruct)"
-            value={pullName}
-            onChange={(e) => setPullName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handlePull()}
-            disabled={pulling}
-            style={{ borderColor: 'rgba(0, 206, 201, 0.3)' }}
-          />
-          <button
-            className="btn btn-primary"
-            onClick={handlePull}
-            disabled={pulling || !pullName.trim()}
-            style={{ background: 'var(--khl-accent-cyan)', borderColor: 'var(--khl-accent-cyan)', color: '#000', boxShadow: 'var(--khl-glow-cyan)' }}
-          >
-            {pulling ? '⏳ Loading…' : '⬇ Load Model'}
-          </button>
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1', minWidth: '240px' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--khl-text-secondary)', display: 'block', marginBottom: '6px' }}>HuggingFace Repository ID</span>
+            <input
+              className="pull-input"
+              type="text"
+              placeholder="e.g. Qwen/Qwen2.5-Coder-7B-Instruct"
+              value={pullName}
+              onChange={(e) => setPullName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handlePull()}
+              disabled={pulling}
+              style={{ borderColor: 'rgba(0, 206, 201, 0.3)', width: '100%', margin: 0 }}
+            />
+          </div>
+          <div style={{ width: '130px' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--khl-text-secondary)', display: 'block', marginBottom: '6px' }}>Context Length</span>
+            <select
+              className="pull-input"
+              value={contextLen}
+              onChange={(e) => setContextLen(e.target.value)}
+              disabled={pulling}
+              style={{ borderColor: 'rgba(0, 206, 201, 0.3)', width: '100%', margin: 0, padding: '8px 12px', background: 'rgba(0,0,0,0.3)', color: 'var(--khl-text-primary)' }}
+            >
+              <option value="8192" style={{ background: '#1c1b22', color: '#fff' }}>8k (8192)</option>
+              <option value="16384" style={{ background: '#1c1b22', color: '#fff' }}>16k (16384)</option>
+              <option value="32768" style={{ background: '#1c1b22', color: '#fff' }}>32k (32768)</option>
+              <option value="65536" style={{ background: '#1c1b22', color: '#fff' }}>64k (65536)</option>
+              <option value="131072" style={{ background: '#1c1b22', color: '#fff' }}>128k (131072)</option>
+            </select>
+          </div>
         </div>
+        <button
+          className="btn btn-primary"
+          onClick={handlePull}
+          disabled={pulling || !pullName.trim()}
+          style={{ background: 'var(--khl-accent-cyan)', borderColor: 'var(--khl-accent-cyan)', color: '#000', boxShadow: 'var(--khl-glow-cyan)', width: '100%', marginBottom: '12px' }}
+        >
+          {pulling ? '⏳ Loading & Preparing Model…' : '⬇ Load Model'}
+        </button>
 
         {percent !== null && (
           <div style={{ marginTop: '12px' }}>
