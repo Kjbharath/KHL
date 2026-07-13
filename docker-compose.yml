@@ -51,6 +51,7 @@ services:
     environment:
       - NCCL_IGNORE_DISABLED_P2P=1
       - HF_TOKEN=${HF_TOKEN:-}
+      - VLLM_DISABLE_MARLIN=1
     command: >
       --model ${VLLM_MODEL:-protoLabsAI/Qwythos-9B-v2-NVFP4}
       --max-model-len ${VLLM_MAX_MODEL_LEN:-65536}
