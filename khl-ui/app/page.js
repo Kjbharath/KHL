@@ -482,6 +482,11 @@ function PonytailDiagnostics({ addToast }) {
   };
 
   const vramPercent = gpu.vram_total > 0 ? (gpu.vram_used / gpu.vram_total) * 100 : 0;
+  const cpuPercent = meta?.cpu_utilization ?? 0;
+  const ramTotalBytes = meta?.ram_total ?? 16 * 1024 * 1024 * 1024;
+  const ramUsedBytes = meta?.ram_used ?? 0;
+  const ramPercent = ramTotalBytes > 0 ? (ramUsedBytes / ramTotalBytes) * 100 : 0;
+  const formatGB = (bytes) => (bytes / (1024 * 1024 * 1024)).toFixed(1);
 
   return (
     <div className="panel" style={{ background: 'linear-gradient(135deg, rgba(108, 92, 231, 0.04), rgba(0, 206, 201, 0.04))', borderColor: 'var(--khl-border-active)' }}>
@@ -494,24 +499,61 @@ function PonytailDiagnostics({ addToast }) {
            Monitor system health and actively manage VRAM to prevent CUDA OOMs. The "Ponytail" philosophy ensures you always have options.
          </p>
          
-         <div style={{ marginBottom: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '8px' }}>
-              <span>VRAM Usage ({gpu.name})</span>
-              <strong style={{ color: 'var(--khl-text-primary)' }}>{gpu.vram_used} / {gpu.vram_total} MB ({Math.round(vramPercent)}%)</strong>
-            </div>
-            <div className="progress-bar-container" style={{ height: '8px', background: 'rgba(255,255,255,0.05)' }}>
-              <div 
-                className="progress-bar" 
-                style={{ 
-                  width: `${Math.min(100, Math.max(0, vramPercent))}%`,
-                  background: vramPercent > 85 ? 'var(--khl-accent-magenta)' : 'linear-gradient(90deg, var(--khl-accent-primary), var(--khl-accent-cyan))'
-                }} 
-              />
-            </div>
-            <div style={{ display: 'flex', gap: '16px', marginTop: '12px', fontSize: '0.75rem', color: 'var(--khl-text-secondary)' }}>
-              <span>🔥 Temp: <strong style={{ color: 'var(--khl-text-primary)' }}>{gpu.temperature}°C</strong></span>
-              <span>⚡ Load: <strong style={{ color: 'var(--khl-text-primary)' }}>{gpu.utilization}%</strong></span>
-            </div>
+         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '24px', marginBottom: '24px' }}>
+           {/* CPU */}
+           <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '8px' }}>
+                <span>💻 CPU Load</span>
+                <strong style={{ color: 'var(--khl-text-primary)' }}>{cpuPercent}%</strong>
+              </div>
+              <div className="progress-bar-container" style={{ height: '8px', background: 'rgba(255,255,255,0.05)' }}>
+                <div 
+                  className="progress-bar" 
+                  style={{ 
+                    width: `${Math.min(100, Math.max(0, cpuPercent))}%`,
+                    background: 'linear-gradient(90deg, #a8ff78, #78ffd6)'
+                  }} 
+                />
+              </div>
+           </div>
+
+           {/* System RAM */}
+           <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '8px' }}>
+                <span>🧠 System RAM</span>
+                <strong style={{ color: 'var(--khl-text-primary)' }}>{formatGB(ramUsedBytes)} / {formatGB(ramTotalBytes)} GB ({Math.round(ramPercent)}%)</strong>
+              </div>
+              <div className="progress-bar-container" style={{ height: '8px', background: 'rgba(255,255,255,0.05)' }}>
+                <div 
+                  className="progress-bar" 
+                  style={{ 
+                    width: `${Math.min(100, Math.max(0, ramPercent))}%`,
+                    background: 'linear-gradient(90deg, #4facfe, #00f2fe)'
+                  }} 
+                />
+              </div>
+           </div>
+
+           {/* VRAM / GPU */}
+           <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '8px' }}>
+                <span>📟 GPU VRAM ({gpu.name})</span>
+                <strong style={{ color: 'var(--khl-text-primary)' }}>{gpu.vram_used} / {gpu.vram_total} MB ({Math.round(vramPercent)}%)</strong>
+              </div>
+              <div className="progress-bar-container" style={{ height: '8px', background: 'rgba(255,255,255,0.05)' }}>
+                <div 
+                  className="progress-bar" 
+                  style={{ 
+                    width: `${Math.min(100, Math.max(0, vramPercent))}%`,
+                    background: vramPercent > 85 ? 'var(--khl-accent-magenta)' : 'linear-gradient(90deg, var(--khl-accent-primary), var(--khl-accent-cyan))'
+                  }} 
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '16px', marginTop: '12px', fontSize: '0.75rem', color: 'var(--khl-text-secondary)' }}>
+                 <span>🔥 Temp: <strong style={{ color: 'var(--khl-text-primary)' }}>{gpu.temperature}°C</strong></span>
+                 <span>⚡ GPU Load: <strong style={{ color: 'var(--khl-text-primary)' }}>{gpu.utilization}%</strong></span>
+              </div>
+           </div>
          </div>
 
          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>

@@ -1,6 +1,30 @@
 export const dynamic = 'force-dynamic';
 
 import http from 'http';
+import os from 'os';
+
+function getCpuUsage() {
+  const cpus = os.cpus();
+  let user = 0, nice = 0, sys = 0, idle = 0, irq = 0;
+  for (const cpu of cpus) {
+    user += cpu.times.user;
+    nice += cpu.times.nice;
+    sys += cpu.times.sys;
+    idle += cpu.times.idle;
+    irq += cpu.times.irq;
+  }
+  const total = user + nice + sys + idle + irq;
+  return { idle, total };
+}
+
+async function sampleCpu() {
+  const start = getCpuUsage();
+  await new Promise(resolve => setTimeout(resolve, 150));
+  const end = getCpuUsage();
+  const idleDiff = end.idle - start.idle;
+  const totalDiff = end.total - start.total;
+  return totalDiff === 0 ? 0 : Math.round(100 - (100 * idleDiff / totalDiff));
+}
 
 // Helper to query the Docker socket
 function dockerApi(path, method = 'POST', body = null) {
@@ -71,49 +95,71 @@ export async function GET() {
       c.Names.some(name => targetNames.includes(name)) && c.State === 'running'
     );
 
-    if (!running) {
-      throw new Error('No active GPU container found');
+    let gpuData = {
+      name: 'NVIDIA GPU (Offline)',
+      utilization: 0,
+      vram_total: 8192,
+      vram_used: 0,
+      temperature: 0,
+      fallback: true
+    };
+
+    if (running) {
+      const containerName = running.Names[0].replace('/', '');
+      try {
+        // Create exec instance
+        const execObj = await dockerApi(`/containers/${containerName}/exec`, 'POST', {
+          AttachStdout: true,
+          AttachStderr: true,
+          Tty: false,
+          Cmd: [
+            "sh",
+            "-c",
+            "nvidia-smi --query-gpu=gpu_name,utilization.gpu,utilization.memory,memory.total,memory.used,temperature.gpu --format=csv,noheader,nounits || /usr/bin/nvidia-smi --query-gpu=gpu_name,utilization.gpu,utilization.memory,memory.total,memory.used,temperature.gpu --format=csv,noheader,nounits || /usr/local/nvidia/bin/nvidia-smi --query-gpu=gpu_name,utilization.gpu,utilization.memory,memory.total,memory.used,temperature.gpu --format=csv,noheader,nounits"
+          ]
+        });
+
+        // Start exec instance
+        const execOutputBuffer = await dockerApi(`/exec/${execObj.Id}/start`, 'POST', {
+          Detach: false,
+          Tty: false
+        });
+
+        const stdout = parseDockerStream(execOutputBuffer);
+        const parts = stdout.split(',').map(s => s.trim());
+        if (parts.length >= 6) {
+          gpuData = {
+            name: parts[0],
+            utilization: parseInt(parts[1], 10),
+            vram_total: parseInt(parts[3], 10),
+            vram_used: parseInt(parts[4], 10),
+            temperature: parseInt(parts[5], 10),
+            container: containerName
+          };
+        }
+      } catch (e) {
+        gpuData.error = e.message;
+      }
     }
 
-    const containerName = running.Names[0].replace('/', '');
-
-    // 2. Create exec instance
-    const execObj = await dockerApi(`/containers/${containerName}/exec`, 'POST', {
-      AttachStdout: true,
-      AttachStderr: true,
-      Tty: false,
-      Cmd: [
-        "sh",
-        "-c",
-        "nvidia-smi --query-gpu=gpu_name,utilization.gpu,utilization.memory,memory.total,memory.used,temperature.gpu --format=csv,noheader,nounits || /usr/bin/nvidia-smi --query-gpu=gpu_name,utilization.gpu,utilization.memory,memory.total,memory.used,temperature.gpu --format=csv,noheader,nounits || /usr/local/nvidia/bin/nvidia-smi --query-gpu=gpu_name,utilization.gpu,utilization.memory,memory.total,memory.used,temperature.gpu --format=csv,noheader,nounits"
-      ]
-    });
-
-    // 3. Start exec instance to collect output
-    const execOutputBuffer = await dockerApi(`/exec/${execObj.Id}/start`, 'POST', {
-      Detach: false,
-      Tty: false
-    });
-
-    const stdout = parseDockerStream(execOutputBuffer);
-
-    // 4. Parse CSV format:
-    // "NVIDIA GeForce RTX 5060 Ti, 0, 0, 8192, 128, 41"
-    const parts = stdout.split(',').map(s => s.trim());
-    if (parts.length < 6) {
-      throw new Error('Malformed nvidia-smi output');
-    }
+    // Get CPU and RAM usage
+    const cpu = await sampleCpu();
+    const ramTotal = os.totalmem();
+    const ramFree = os.freemem();
+    const ramUsed = ramTotal - ramFree;
 
     return Response.json({
-      name: parts[0],
-      utilization: parseInt(parts[1], 10),
-      vram_total: parseInt(parts[3], 10),
-      vram_used: parseInt(parts[4], 10),
-      temperature: parseInt(parts[5], 10),
-      container: containerName
+      ...gpuData,
+      cpu_utilization: cpu,
+      ram_total: ramTotal,
+      ram_used: ramUsed
     });
   } catch (err) {
-    // Fallback response to prevent crashes when engines are fully offline
+    const cpu = await sampleCpu().catch(() => 0);
+    const ramTotal = os.totalmem();
+    const ramFree = os.freemem();
+    const ramUsed = ramTotal - ramFree;
+
     return Response.json({
       name: 'NVIDIA GPU (Offline)',
       utilization: 0,
@@ -121,7 +167,10 @@ export async function GET() {
       vram_used: 0,
       temperature: 0,
       fallback: true,
-      error: err.message
+      error: err.message,
+      cpu_utilization: cpu,
+      ram_total: ramTotal,
+      ram_used: ramUsed
     });
   }
 }
