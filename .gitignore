@@ -1,0 +1,17 @@
+# Dependencies
+khl-ui/node_modules/
+khl-ui/.next/
+
+# Model caches (large files)
+models/hf/
+models/ollama/
+models/comfyui/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+.env*.local

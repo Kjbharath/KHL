@@ -1,0 +1,105 @@
+
+services:
+  # KenjuHomieLab Custom Web Dashboard
+  khl-ui:
+    image: node:20-alpine
+    container_name: khl-ui
+    working_dir: /app
+    ports:
+      - "${BIND_IP:-0.0.0.0}:3000:3000"
+    environment:
+      - OLLAMA_API_URL=http://ollama-engine:11434
+      - VLLM_API_URL=http://vllm-engine:8000/v1
+      - COMFYUI_API_URL=http://bharath-comfyui:8188
+      - NODE_OPTIONS=--dns-result-order=ipv4first
+    volumes:
+      - ./khl-ui:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: sh -c "npm install && npm run dev"
+    restart: always
+    depends_on:
+      - ollama-engine
+
+  # Dedicated Ollama Fast-Exploration Core
+  ollama-engine:
+    image: ollama/ollama:latest
+    container_name: ollama-engine
+    ports:
+      - "${BIND_IP:-0.0.0.0}:11434:11434"
+    volumes:
+      - ./models/ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: always
+
+  # Production-Grade vLLM Inference Engine (Blackwell Architecture Support)
+  vllm-engine:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-engine
+    ports:
+      - "${BIND_IP:-0.0.0.0}:8000:8000"
+    volumes:
+      - /home/kenju/.cache/huggingface:/root/.cache/huggingface
+    environment:
+      - NCCL_IGNORE_DISABLED_P2P=1
+    command: >
+      --model protoLabsAI/Qwythos-9B-v2-NVFP4
+      --max-model-len 65536
+      --gpu-memory-utilization 0.95
+      --kv-cache-dtype fp8
+      --enforce-eager
+      --enable-auto-tool-choice
+      --tool-call-parser hermes
+      --enable-prefix-caching
+      --enable-chunked-prefill
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: always
+
+  # Sandboxed ComfyUI Instance for Bharath's Video Lab
+  bharath-comfyui:
+    build:
+      context: .
+      dockerfile: comfyui.Dockerfile
+    container_name: bharath-comfyui
+    ports:
+      - "${BIND_IP:-0.0.0.0}:8188:8188"
+    volumes:
+      - ./models/comfyui:/root/ComfyUI/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: always
+
+  # Primary Chat Frontend (Open WebUI) - Ponytail Solution
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    ports:
+      - "${BIND_IP:-0.0.0.0}:8080:8080"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama-engine:11434
+      - OPENAI_API_BASE_URL=http://vllm-engine:8000/v1
+      - OPENAI_API_KEY=dummy
+      - DEFAULT_SYSTEM_PROMPT="You are a helpful AI. You must write all of your internal reasoning and thoughts inside <think> and </think> tags before you provide your final answer."
+    volumes:
+      - open-webui_data:/app/backend/data
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  open-webui_data:

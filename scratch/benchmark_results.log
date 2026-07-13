@@ -1,0 +1,152 @@
+
+########################################################################
+  KHL Full Benchmark Suite — vLLM + Hermes Agent Level
+  2026-07-13 04:03:52
+########################################################################
+  Endpoint: http://localhost:8000/v1
+  Model   : protoLabsAI/Qwythos-9B-v2-NVFP4
+  Context : 65536 tokens
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 1 — Baseline Latency (n=10 sequential requests)
+════════════════════════════════════════════════════════════════════════
+
+  ── Streaming (stream=True) ─────────────────────────────────────
+  [01] ✓  TTFT=243.4ms  tps=34.9
+  [02] ✓  TTFT=70.7ms  tps=37.4
+  [03] ✓  TTFT=72.6ms  tps=37.0
+  [04] ✓  TTFT=75.0ms  tps=37.1
+  [05] ✓  TTFT=72.0ms  tps=36.5
+  [06] ✓  TTFT=75.3ms  tps=36.4
+  [07] ✓  TTFT=71.5ms  tps=36.5
+  [08] ✓  TTFT=70.6ms  tps=37.6
+  [09] ✓  TTFT=73.1ms  tps=37.1
+  [10] ✓  TTFT=72.9ms  tps=37.1
+
+  Metric                    P50      P90      P99     Mean
+  ------------------------------------------------
+  TTFT (ms)                72.6     75.3     75.3     89.7
+  TPOT (ms/tok)            26.2     26.7     26.7     26.3
+  ITL (ms)                 26.5        —        —     26.6
+  E2E (ms)               2696.9   2750.2   2750.2   2721.2
+
+  ── Non-Streaming (stream=False) ────────────────────────────────
+  [01] ✓  TTFT=2701.6ms  tokens=100
+  [02] ✓  TTFT=2670.9ms  tokens=100
+  [03] ✓  TTFT=2688.5ms  tokens=100
+  [04] ✓  TTFT=2673.1ms  tokens=100
+  [05] ✓  TTFT=2691.7ms  tokens=100
+  [06] ✓  TTFT=2691.9ms  tokens=100
+  [07] ✓  TTFT=2662.1ms  tokens=100
+  [08] ✓  TTFT=2665.9ms  tokens=100
+  [09] ✓  TTFT=2677.6ms  tokens=100
+  [10] ✓  TTFT=2651.1ms  tokens=100
+
+  Metric                    P50      P90      P99     Mean
+  ------------------------------------------------
+  TTFT (ms)              2673.1   2691.9   2691.9   2677.4
+  TPOT (ms/tok)             0.0      0.0      0.0      0.0
+  ITL (ms)                  0.0        —        —      0.0
+  E2E (ms)               2673.1   2691.9   2691.9   2677.4
+
+  📊 Streaming vs Non-Streaming TTFT delta: +2587.7ms
+     (Non-streaming TTFT = full generation time; streaming starts faster)
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 2 — Concurrency Sweep (PagedAttention + Continuous Batching)
+════════════════════════════════════════════════════════════════════════
+
+  ── Concurrency = 1  (16 total requests) ────────────────────────
+  Wall: 52.1s | Req/s: 0.31 | Tok/s: 36.8 | TTFT-P50: 71.6ms | TTFT-P99: 75.1ms | TPOT-P50: 26.5ms
+
+  ── Concurrency = 2  (16 total requests) ────────────────────────
+  Wall: 26.8s | Req/s: 0.60 | Tok/s: 71.5 | TTFT-P50: 88.6ms | TTFT-P99: 113.0ms | TPOT-P50: 27.2ms
+
+  ── Concurrency = 4  (16 total requests) ────────────────────────
+  Wall: 13.4s | Req/s: 1.19 | Tok/s: 142.8 | TTFT-P50: 111.6ms | TTFT-P99: 118.0ms | TPOT-P50: 27.1ms
+
+  ── Concurrency = 8  (16 total requests) ────────────────────────
+  Wall: 6.8s | Req/s: 2.36 | Tok/s: 283.1 | TTFT-P50: 130.0ms | TTFT-P99: 138.3ms | TPOT-P50: 27.2ms
+
+  ── Concurrency = 16  (16 total requests) ───────────────────────
+  Wall: 3.6s | Req/s: 4.40 | Tok/s: 527.9 | TTFT-P50: 253.2ms | TTFT-P99: 256.5ms | TPOT-P50: 28.2ms
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 3 — Context Length Scaling (TTFT vs prompt size)
+════════════════════════════════════════════════════════════════════════
+  Short   (~10 tok)  →  TTFT P50=70.8ms  P99=72.9ms  mean=72.3ms
+  Medium (~50 tok)  →  TTFT P50=72.0ms  P99=75.0ms  mean=73.5ms
+  Long  (~400 tok)  →  TTFT P50=96.4ms  P99=97.2ms  mean=97.1ms
+
+  📊 Note: TTFT grows with prompt length (longer prefill pass on GPU)
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 4 — Multi-Turn Conversation (growing KV cache)
+════════════════════════════════════════════════════════════════════════
+  Simulates a real chat session — each turn adds to the context window.
+  Turn 1  TTFT=72.5ms  E2E=3275.5ms  ctx≈90 words
+  Turn 2  TTFT=73.3ms  E2E=3260.2ms  ctx≈185 words
+  Turn 3  TTFT=86.0ms  E2E=3318.2ms  ctx≈294 words
+  Turn 4  TTFT=100.0ms  E2E=3408.4ms  ctx≈381 words
+
+  📊 TTFT should stay stable — KV cache is reused across turns (PagedAttention)
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 5 — Tool Calling (Hermes-style function calling overhead)
+════════════════════════════════════════════════════════════════════════
+
+  Query                                             TTFT   Tool?       E2E
+  ------------------------------------------------------------------------
+  Search for the latest Python 3.13 release not   4099.2ms (direct)    4099.2ms
+  Read the file at /etc/os-release and tell me    2509.1ms (direct)    2509.1ms
+  Calculate the factorial of 10 using code.       4137.3ms (direct)    4137.3ms
+  What is the capital of France? Answer directl   1546.8ms (direct)    1546.8ms
+
+  ── Concurrent tool-calling requests (4 simultaneous) ───────────
+  8 concurrent tool-call requests:
+  TTFT P50=3095.5ms  P99=3182.2ms  Tool trigger rate=0/8
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 6 — Throughput Ceiling (finding max stable tok/s)
+════════════════════════════════════════════════════════════════════════
+
+  Testing concurrency=8 with n=24 requests...
+  c=8: 280.4 tok/s  |  TTFT P99=137.0ms  |  24/24 ok
+
+  Testing concurrency=16 with n=24 requests...
+  c=16: 409.3 tok/s  |  TTFT P99=227.0ms  |  24/24 ok
+
+  Testing concurrency=24 with n=24 requests...
+  c=24: 721.8 tok/s  |  TTFT P99=291.6ms  |  24/24 ok
+
+  📊 Peak throughput: 721.8 tok/s at concurrency=24
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 7 — vLLM Prometheus Metrics Snapshot
+════════════════════════════════════════════════════════════════════════
+
+  vllm:num_requests_running{engine="0",model_name="protoLabsAI/Qwythos-9B-v2-NVFP4"} 1.0
+  vllm:num_requests_waiting{engine="0",model_name="protoLabsAI/Qwythos-9B-v2-NVFP4"} 0.0
+
+════════════════════════════════════════════════════════════════════════
+  FINAL SUMMARY — Concurrency Scaling
+════════════════════════════════════════════════════════════════════════
+
+     C   Req/s    Tok/s   TTFT-P50   TTFT-P99   TPOT-P50
+  --------------------------------------------------------
+     1    0.31     36.8       71.6       75.1       26.5
+     2    0.60     71.5       88.6      113.0       27.2
+     4    1.19    142.8      111.6      118.0       27.1
+     8    2.36    283.1      130.0      138.3       27.2
+    16    4.40    527.9      253.2      256.5       28.2
+
+  Throughput scaling vs C=1:
+    C= 1  ██████████████████████████████      36.8 tok/s (1.00x)
+    C= 2  ██████████████████████████████████████████████████████████ 71.5 tok/s (1.94x)
+    C= 4  ████████████████████████████████████████████████████████████████████████████████████████████████████████████████████ 142.8 tok/s (3.88x)
+    C= 8  ██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████ 283.1 tok/s (7.69x)
+    C=16  █████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████ 527.9 tok/s (14.33x)
+
+════════════════════════════════════════════════════════════════════════
+
+  ✅ All benchmark sections complete!
