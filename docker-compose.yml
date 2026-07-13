@@ -51,7 +51,7 @@ services:
       - NCCL_IGNORE_DISABLED_P2P=1
     command: >
       --model ${VLLM_MODEL:-protoLabsAI/Qwythos-9B-v2-NVFP4}
-      --max-model-len ${VLLM_MAX_MODEL_LEN:-32768}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-65536}
       --gpu-memory-utilization 0.95
       --kv-cache-dtype fp8
       --enforce-eager
