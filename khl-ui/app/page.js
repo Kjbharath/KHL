@@ -256,6 +256,8 @@ function VLLMPanel({ addToast }) {
     setPullProgress('Initiating vLLM model download/load…\n');
     addToast('info', `Configuring vLLM to load ${pullName}…`);
 
+    let hasError = false;
+
     try {
       const res = await fetch('/api/vllm/pull', {
         method: 'POST',
@@ -276,6 +278,7 @@ function VLLMPanel({ addToast }) {
             try {
               const json = JSON.parse(line);
               if (json.error) {
+                hasError = true;
                 setError(json.error);
                 setPercent(null);
                 setPullProgress((prev) => prev + `❌ Error: ${json.error}\n`);
@@ -293,8 +296,7 @@ function VLLMPanel({ addToast }) {
           }
         }
       }
-      // Only show success if no error was set during the stream
-      if (!error) {
+      if (!hasError) {
         addToast('success', `Successfully configured vLLM with ${pullName}`);
         setPullName('');
         setPercent(null);
