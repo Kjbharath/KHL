@@ -204,6 +204,24 @@ function OllamaPanel({ addToast }) {
         </div>
 
         <div className="section-title" style={{ marginTop: '24px' }}>Model Manager</div>
+        {status === 'online' && meta?.models && meta.models.length > 0 && (
+          <div style={{ marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--khl-text-secondary)', display: 'block', marginBottom: '6px' }}>Quick Select (Downloaded Models)</span>
+            <select
+              className="pull-input"
+              onChange={(e) => setPullName(e.target.value)}
+              value=""
+              style={{ width: '100%', margin: 0, padding: '8px 12px', background: 'rgba(0,0,0,0.3)', color: 'var(--khl-text-primary)', borderColor: 'rgba(108, 92, 231, 0.3)' }}
+            >
+              <option value="" disabled style={{ background: '#1c1b22', color: 'var(--khl-text-secondary)' }}>-- Choose a downloaded model --</option>
+              {meta.models.map((m) => (
+                <option key={m.name} value={m.name} style={{ background: '#1c1b22', color: '#fff' }}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="pull-bar">
           <input
             className="pull-input"
@@ -245,6 +263,22 @@ function VLLMPanel({ addToast }) {
   const [pullProgress, setPullProgress] = useState('');
   const [percent, setPercent] = useState(null);
   const [error, setError] = useState(null);
+  const [cachedModels, setCachedModels] = useState([]);
+
+  useEffect(() => {
+    const fetchCached = async () => {
+      try {
+        const res = await fetch('/api/vllm/cached-models');
+        if (res.ok) {
+          const data = await res.json();
+          setCachedModels(data.models || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch cached models:', err);
+      }
+    };
+    fetchCached();
+  }, [pulling]);
 
   const activeModel = meta?.data?.[0]?.id || 'No model loaded';
 
@@ -346,6 +380,25 @@ function VLLMPanel({ addToast }) {
         </div>
 
         <div className="section-title" style={{ marginTop: '24px' }}>Model Manager</div>
+        {cachedModels.length > 0 && (
+          <div style={{ marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--khl-text-secondary)', display: 'block', marginBottom: '6px' }}>Quick Select (Cached Models)</span>
+            <select
+              className="pull-input"
+              onChange={(e) => setPullName(e.target.value)}
+              value=""
+              disabled={pulling}
+              style={{ width: '100%', margin: 0, padding: '8px 12px', background: 'rgba(0,0,0,0.3)', color: 'var(--khl-text-primary)', borderColor: 'rgba(0, 206, 201, 0.3)' }}
+            >
+              <option value="" disabled style={{ background: '#1c1b22', color: 'var(--khl-text-secondary)' }}>-- Choose a cached model --</option>
+              {cachedModels.map((m) => (
+                <option key={m} value={m} style={{ background: '#1c1b22', color: '#fff' }}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
           <div style={{ flex: '1', minWidth: '240px' }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--khl-text-secondary)', display: 'block', marginBottom: '6px' }}>HuggingFace Repository ID</span>
