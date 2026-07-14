@@ -4,27 +4,40 @@ import path from 'path';
 
 const envPath = '/project/.env';
 
-function updateEnv(modelName) {
+function updateEnv(modelName, maxModelLen) {
   let content = '';
   if (fs.existsSync(envPath)) {
     content = fs.readFileSync(envPath, 'utf8');
   }
   
-  const regex = /^VLLM_MODEL=.*$/m;
-  if (regex.test(content)) {
-    content = content.replace(regex, `VLLM_MODEL=${modelName}`);
+  const modelRegex = /^VLLM_MODEL=.*$/m;
+  if (modelRegex.test(content)) {
+    content = content.replace(modelRegex, `VLLM_MODEL=${modelName}`);
   } else {
     if (content && !content.endsWith('\n')) {
       content += '\n';
     }
     content += `VLLM_MODEL=${modelName}\n`;
   }
+
+  if (maxModelLen) {
+    const lenRegex = /^VLLM_MAX_MODEL_LEN=.*$/m;
+    if (lenRegex.test(content)) {
+      content = content.replace(lenRegex, `VLLM_MAX_MODEL_LEN=${maxModelLen}`);
+    } else {
+      if (content && !content.endsWith('\n')) {
+        content += '\n';
+      }
+      content += `VLLM_MAX_MODEL_LEN=${maxModelLen}\n`;
+    }
+  }
+
   fs.writeFileSync(envPath, content, 'utf8');
 }
 
 export async function POST(request) {
   try {
-    const { name } = await request.json();
+    const { name, max_model_len } = await request.json();
     if (!name || !name.trim()) {
       return Response.json({ error: 'Model name is required' }, { status: 400 });
     }
@@ -37,8 +50,8 @@ export async function POST(request) {
 
         // 1. Update the env file
         try {
-          updateEnv(modelName);
-          controller.enqueue(encoder.encode(JSON.stringify({ status: `Configured VLLM_MODEL=${modelName} in .env` }) + '\n'));
+          updateEnv(modelName, max_model_len);
+          controller.enqueue(encoder.encode(JSON.stringify({ status: `Configured VLLM_MODEL=${modelName} ${max_model_len ? `and VLLM_MAX_MODEL_LEN=${max_model_len} ` : ''}in .env` }) + '\n'));
         } catch (err) {
           controller.enqueue(encoder.encode(JSON.stringify({ error: `Failed to update .env: ${err.message}` }) + '\n'));
           controller.close();
